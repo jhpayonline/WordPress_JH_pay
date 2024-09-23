@@ -6,7 +6,7 @@ class WcJhpayGateway extends WC_Payment_Gateway
 {
     public string $webhook_name = 'pay-jhpay-payment-result';
     public string $webhook_url = '';
-    public string $base_url = 'https://pay.jhpay.online/shops/api/';
+    public string $base_url = 'https://pay.jhpay.online/api/pay/';
 
     public function __construct()
     {
@@ -23,7 +23,7 @@ class WcJhpayGateway extends WC_Payment_Gateway
         $this->description = $this->get_option('description');
         $this->enabled = $this->get_option('enabled');
 
-        $this->shop_id = $this->get_option('shop_id');
+        $this->currency = $this->get_option('currency');
         $this->token = $this->get_option('token');
 
         $this->webhook_url = site_url("/wc-api/$this->webhook_name");
@@ -54,13 +54,21 @@ class WcJhpayGateway extends WC_Payment_Gateway
                 'description' => 'Описание этого метода оплаты, которое будет отображаться пользователю на странице оформления заказа.',
                 'default' => '',
             ],
-            'shop_id' => [
-                'title' => 'ID магазина',
-                'type' => 'text'
-            ],
             'token' => [
                 'title' => 'Токен',
                 'type' => 'text'
+            ],
+            'currency' => [
+                'title' => 'Валюта',
+                'type' => 'select',
+                'options' => [
+                    643 => 'RUB',
+                    840 => 'USD',
+                    980 => 'UAH',
+                    398 => 'KZT',
+                    860 => 'UZS',
+                ],
+                'default' => 643
             ],
         ];
     }
@@ -68,30 +76,40 @@ class WcJhpayGateway extends WC_Payment_Gateway
     public function process_payment($order_id): array
     {
         $order = wc_get_order($order_id);
+        $email = $order->get_billing_email();
+        $phone_number = $order->get_billing_phone();
+        $name = $order->get_billing_first_name();
+        $last_name = $order->get_billing_last_name();
+        $full_name = implode(' ', [$name, $last_name]);
 
         $client = new Client([
             'base_uri' => $this->base_url,
             'http_errors' => false,
-            'verify' => false
+            'verify' => false,
+            'headers' => [
+                'API-TOKEN' => $this->token,
+            ]
         ]);
 
-        $response = $client->post('create', [
-            'form_params' => [
-                'shop_id' => $this->shop_id,
-                'order_id' => $order_id . '-' . time(),
-                'token' => $this->token,
+        $response = $client->post('order/create', [
+            'json' => [
+                'orderNumber' => $order_id . '-' . time(),
+                'description' => $order_id,
                 'amount' => $order->get_total(),
-                'currency' => get_woocommerce_currency()
+                'currency' => $this->currency,
+                'phone' => $phone_number,
+                'email' => $email,
+                'name' => $full_name,
             ]
         ]);
 
         $content = $response->getBody()->getContents();
         $result = json_decode($content, true);
 
-        if (is_array($result) && isset($result['url'])) {
+        if (is_array($result) && isset($result['formUrl'])) {
             return [
                 'result' => 'success',
-                'redirect' => $result['url']
+                'redirect' => $result['formUrl']
             ];
         }
 
@@ -110,8 +128,10 @@ class WcJhpayGateway extends WC_Payment_Gateway
 
         update_option('pay-jhpay-debug', json_encode($post, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
+        $sign = $_SERVER['HTTP_SIGNATURE'];
+        $sign2 = hash_hmac('sha256', $post['id'] . '|' . $post['createdDateTime'] . '|' . $post['amount'], $this->token);
 
-        if (!isset($post['order_id']) && !isset($post['status']) && !isset($post['amount'])) {
+        if ($sign !== $sign2) {
             wp_send_json(['success' => false]);
             wp_die();
         }
