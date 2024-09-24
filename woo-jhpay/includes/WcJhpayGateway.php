@@ -45,7 +45,7 @@ class WcJhpayGateway extends WC_Payment_Gateway
                 'title' => 'Заголовок',
                 'type' => 'text',
                 'description' => 'Этот текст отображается пользователю как название метода оплаты на странице оформления заказа',
-                'default' => 'Оплатить картой через jhpay.online',
+                'default' => 'Оплатить картой через JH Pay',
                 'desc_tip' => true,
             ],
             'description' => [
