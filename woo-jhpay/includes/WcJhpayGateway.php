@@ -11,8 +11,8 @@ class WcJhpayGateway extends WC_Payment_Gateway
     public function __construct()
     {
         $this->id = 'pay-jhpay';
-        $this->method_title = 'Платёжный шлюз jhpay.online';
-        $this->method_description = 'Платёжный шлюз jhpay.online';
+        $this->method_title = 'Платёжный шлюз JH Pay';
+        $this->method_description = 'Платёжный шлюз JH Pay';
 
         $this->supports = ['products'];
 
